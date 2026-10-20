@@ -1,0 +1,15 @@
+[package]
+name = "bromine-tui"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = "1.0.104"
+bromine = { version = "0.1.0", path = "../bromine" }
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+crossterm = "0.29.0"
+open = "5.4.4"
+ratatui = "0.30.2"
+unicode-width = "0.2.2"

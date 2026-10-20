@@ -1,0 +1,20 @@
+[package]
+name = "bromine"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["std", "clock"] }
+dirs = "7.0.0"
+open = "5.4.4"
+reqwest = { version = "0.13.5", features = ["blocking", "json", "form", "query"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+url = "2.5.8"
+
+[dev-dependencies]
+mockito = "1.7.2"
+tempfile = "3.27.0"
