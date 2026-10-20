@@ -118,3 +118,7 @@ test backend and drive keys and clicks through the same handlers the app uses.
 
 Submitting work, grades beyond the per-assignment scores the LMS shows students, and opening the links inside
 topics (they are shown as text; your terminal can open them).
+
+## License
+
+MIT, see [LICENSE](LICENSE).
