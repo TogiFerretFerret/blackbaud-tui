@@ -12,6 +12,7 @@ use bromine::{
 };
 use chrono::{Duration as Dur, NaiveDateTime};
 
+use crate::data::{Key, Payload};
 use crate::worker::{Cmd, Event};
 
 const CLASSES: [(&str, i64, &str); 5] = [
@@ -157,6 +158,8 @@ pub fn detail(it: &CenterItem) -> AssignmentDetail {
 pub fn feed(now: NaiveDateTime) -> Vec<FeedItem> {
     vec![
         FeedItem {
+            id: Some(2),
+            ticks: Some(2),
             when: Some(now - Dur::hours(2)),
             from: Some("Mr. Brooks".into()),
             class: Some("ENGLISH III - 20".into()),
@@ -165,6 +168,8 @@ pub fn feed(now: NaiveDateTime) -> Vec<FeedItem> {
             text: Some("On Thursday and Friday we'll hold two seminars.\nBring your annotated text.".into()),
         },
         FeedItem {
+            id: Some(1),
+            ticks: Some(1),
             when: Some(now - Dur::hours(20)),
             from: Some("Ms. Alvarez".into()),
             class: Some("BIOLOGY - 20".into()),
@@ -289,6 +294,27 @@ pub fn user_files() -> Vec<UserFile> {
     ]
 }
 
+/// What the fake LMS answers for `key`.
+pub fn payload(key: &Key, items: &[CenterItem], now: NaiveDateTime) -> Result<Payload, String> {
+    Ok(match key {
+        Key::Center => Payload::Center(items.to_vec()),
+        Key::Classes => Payload::Classes(classes()),
+        Key::Feed => Payload::Feed(feed(now)),
+        Key::Detail(id) => {
+            Payload::Detail(Box::new(items.iter().find(|i| !i.is_task() && i.id == *id).map(detail).ok_or("no such assignment")?))
+        }
+        Key::ClassInfo(section) => Payload::ClassInfo(Box::new(class_info(*section))),
+        Key::ClassRows(lead) => Payload::ClassRows(class_rows(items, *lead)),
+        Key::Topics(_) => Payload::Topics(topics(now)),
+        Key::TopicItems { topic, .. } => Payload::TopicItems(topic_items(*topic)),
+        Key::News(_) => Payload::News(news(now)),
+        Key::ClassFiles(_) => Payload::ClassFiles(class_files(now)),
+        Key::Grades(section) => Payload::Grades(grades(*section)?),
+        Key::People(_) => Payload::People(people()),
+        Key::UserFiles => Payload::UserFiles(user_files()),
+    })
+}
+
 /// An in-memory LMS answering the UI's commands, with a small delay so spinners are visible.
 pub fn spawn(rx: Receiver<Cmd>, tx: Sender<Event>, now: NaiveDateTime) -> JoinHandle<()> {
     std::thread::spawn(move || {
@@ -298,16 +324,7 @@ pub fn spawn(rx: Receiver<Cmd>, tx: Sender<Event>, now: NaiveDateTime) -> JoinHa
             std::thread::sleep(Duration::from_millis(150));
             let ev = match cmd {
                 Cmd::Quit => break,
-                Cmd::Center => Event::Center(Ok(items.clone())),
-                Cmd::Classes => Event::Classes(Ok(classes())),
-                Cmd::Feed => Event::Feed(Ok(feed(now))),
-                Cmd::Detail(id) => {
-                    Event::Detail { id, result: items.iter().find(|i| i.id == id).map(detail).ok_or_else(|| "no such assignment".into()) }
-                }
-                Cmd::ClassInfo { section_id } => Event::ClassInfo { section_id, result: Ok(class_info(section_id)) },
-                Cmd::ClassAssignments { lead_section_id } => {
-                    Event::ClassAssignments { lead_section_id, result: Ok(class_rows(&items, lead_section_id)) }
-                }
+                Cmd::Load(key) => Event::Loaded { result: payload(&key, &items, now), key },
                 Cmd::SetStatus { id, status, task } => {
                     let result = if status == Status::Completed && !task && id == 4 {
                         Err("'Map Analysis (1612)' takes a file submission and none has been made; it will be marked completed when you submit it in the LMS".to_owned())
@@ -331,13 +348,6 @@ pub fn spawn(rx: Receiver<Cmd>, tx: Sender<Event>, now: NaiveDateTime) -> JoinHa
                     edit_task(&mut items, id, &patch, now);
                     Event::TaskEdited(Ok(()))
                 }
-                Cmd::Topics { section_id } => Event::Topics { section_id, result: Ok(topics(now)) },
-                Cmd::TopicItems(t) => Event::TopicItems { topic_id: t.topic_id, result: Ok(topic_items(t.topic_id)) },
-                Cmd::News { section_id } => Event::News { section_id, result: Ok(news(now)) },
-                Cmd::ClassFiles { section_id } => Event::ClassFiles { section_id, result: Ok(class_files(now)) },
-                Cmd::Grades { section_id } => Event::Grades { section_id, result: grades(section_id) },
-                Cmd::People { section_id } => Event::People { section_id, result: Ok(people()) },
-                Cmd::UserFiles => Event::UserFiles(Ok(user_files())),
                 // nothing is written in the demo
                 Cmd::Fetch { name, action, .. } => Event::Fetched { result: Ok(PathBuf::from("~/Downloads").join(&name)), name, action },
             };

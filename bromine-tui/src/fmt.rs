@@ -58,6 +58,17 @@ pub fn long_when(dt: NaiveDateTime) -> String {
     dt.format("%a %b %-d, %-I:%M %p").to_string()
 }
 
+/// How long ago, roughly: `just now`, `3m ago`, `2h ago`, `4d ago`.
+pub fn ago(then: NaiveDateTime, now: NaiveDateTime) -> String {
+    let secs = (now - then).num_seconds().max(0);
+    match secs {
+        0..=44 => "just now".into(),
+        45..=3599 => format!("{}m ago", (secs + 30) / 60),
+        3600..=86_399 => format!("{}h ago", secs / 3600),
+        _ => format!("{}d ago", secs / 86_400),
+    }
+}
+
 /// Greedy word wrap to `width` columns. Keeps blank lines; breaks over-long words.
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
     let width = width.max(1);
@@ -186,6 +197,17 @@ mod tests {
         assert_eq!(due_label(Some(dt(2026, 10, 2, 0, 0)), now), "Fri");
         assert_eq!(due_label(None, now), "no date");
         assert_eq!(long_when(dt(2026, 10, 7, 8, 0)), "Wed Oct 7, 8:00 AM");
+    }
+
+    #[test]
+    fn ago_is_rough() {
+        let now = dt(2026, 10, 20, 12, 0);
+        let at = |h, m| dt(2026, 10, 20, h, m);
+        assert_eq!(ago(at(12, 0), now), "just now");
+        assert_eq!(ago(at(11, 57), now), "3m ago");
+        assert_eq!(ago(at(9, 30), now), "2h ago");
+        assert_eq!(ago(dt(2026, 10, 16, 12, 0), now), "4d ago");
+        assert_eq!(ago(dt(2026, 10, 21, 12, 0), now), "just now", "the future clamps");
     }
 
     #[test]

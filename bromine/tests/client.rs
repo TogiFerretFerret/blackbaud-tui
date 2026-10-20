@@ -352,6 +352,51 @@ fn feed_topics_announcements_and_files_parse() {
 }
 
 #[test]
+fn feed_posts_carry_an_id_and_a_cursor_and_polling_returns_only_newer_ones() {
+    let mut s = Lms::new();
+    s.signed_in();
+    s.get(
+        "/api/datadirect/ActivityFeedGet",
+        json!([{"publish_date": "9/30/2026 11:00 AM", "user_name": "T", "feed_index_log_id": 77, "audit_date_serverTicks": 639263662837700000_i64,
+                "content_short_description": "Sem", "content_locations": ""}]),
+    );
+    let client = s.client();
+    let feed = client.activity_feed().unwrap();
+    assert_eq!((feed[0].id, feed[0].ticks), (Some(77), Some(639263662837700000)));
+
+    let newer = s.lms.mock("GET", path("/api/datadirect/ActivityFeedRefresh")).match_query(mockito::Matcher::UrlEncoded("firstDate".into(), "639263662837700000".into()))
+        .with_header("content-type", "application/json")
+        .with_body(json!([{"publish_date": "9/30/2026 12:00 PM", "feed_index_log_id": 78, "audit_date_serverTicks": 639263700000000000_i64, "content_locations": ""}]).to_string())
+        .create();
+    let fresh = client.activity_feed_since(639263662837700000).unwrap();
+    newer.assert();
+    assert_eq!(fresh.iter().map(|f| f.id).collect::<Vec<_>>(), [Some(78)]);
+}
+
+#[test]
+fn models_survive_a_json_round_trip_for_the_on_disk_cache() {
+    let item = bromine::CenterItem {
+        bucket: bromine::Bucket::DueToday,
+        kind: bromine::ItemKind::Task,
+        id: 5,
+        assignment_id: 0,
+        section_id: 0,
+        class: "General Task".into(),
+        name: "x".into(),
+        assignment_type: None,
+        due: bromine::text::parse_lms_datetime("10/3/2026 11:59 PM"),
+        assigned: None,
+        status: bromine::Status::Other(9),
+        points: Some(2.5),
+        major: true,
+        flags: Default::default(),
+        has_download: false,
+    };
+    let back: bromine::CenterItem = serde_json::from_str(&serde_json::to_string(&item).unwrap()).unwrap();
+    assert_eq!(back, item);
+}
+
+#[test]
 fn the_roster_hides_student_emails() {
     let mut s = Lms::new();
     s.signed_in();

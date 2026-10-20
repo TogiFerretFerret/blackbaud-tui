@@ -38,7 +38,7 @@ Four views:
 - **Assignments**: the assignment center grouped by due date, with a detail pane and status buttons.
 - **Classes**: pick a class, then switch between its **About**, **Work**, **Topics**, **News**, **Files**,
   **Grades** and **People**. Each is a list with a preview underneath, fetched the first time you open it.
-- **Feed**: teacher posts.
+- **Feed**: school posts, every class's announcements and every topic a teacher publishes, newest first (see below).
 - **Files**: the files the school has published to you.
 
 | | |
@@ -54,10 +54,11 @@ Four views:
 | `o` `d` `P` `a` | the file shown: open it / save it to Downloads / print it (PDF, double-sided, asks first) / next file |
 | `/`, `p`, `h` | filter by name or class; show past work; hide completed |
 | `[ ]`, `Ctrl-u/d` | scroll the detail pane |
-| `r`, `?`, `q` | refresh; help; quit |
+| `r` `R` | refresh what is on screen; refresh everything |
+| `?`, `q` | help; quit |
 
 Files are saved to `$BROMINE_DOWNLOADS`, else `~/Downloads`, and never overwrite: a second copy becomes
-`name (2).ext`. Open uses `xdg-open`; print uses `lpr -o sides=two-sided-long-edge`.
+`name (2).ext`. Open uses the desktop's opener (`xdg-open` / `open`); print uses `lpr -o sides=two-sided-long-edge`.
 
 **Mouse:** click tabs, section tabs, rows, files and buttons; the wheel scrolls the list or the detail pane under
 the cursor; dialogs have clickable buttons.
@@ -68,6 +69,25 @@ file-submission assignment you have not submitted, which the library never allow
 If the saved session has lapsed, the TUI refreshes it silently, and failing that opens the browser sign-in
 and shows a dialog while it waits. Sign-in needs `capture.user.js` installed in your
 userscript manager.
+
+### Freshness, caching and the feed
+
+Nothing is fetched twice for no reason and nothing blanks while it refreshes.
+
+- **Cache.** Everything the LMS tells the app is kept, with the time it was fetched, in
+  `~/.cache/blackbaud-tui/cache.json` (0600; your school data, so keep it private). The next start paints from it
+  in a fraction of a second and then refetches only what has gone stale: assignments and the feed after a minute,
+  assignment details, announcements and class work after five, topics, files and grades after ten, classes,
+  rosters and school files after an hour. `--no-cache` skips it, `--clear-cache` deletes it.
+- **Quiet refresh.** Old data stays on screen while new data loads (the top bar shows `updating` and
+  `updated 3m ago`). `r` refreshes just the view you are looking at, `R` everything. Every ten seconds the
+  visible view refreshes whatever is stale. A failing refresh keeps the old data, tells you once, and is not
+  retried for a minute.
+- **Parallel.** Reads run four at a time; changes (status, tasks) run in the order you made them. If the session
+  lapses under several requests at once, one of them renews it and the rest reuse the result.
+- **The feed.** The LMS's activity feed only ever returns the newest ten posts and ignores paging parameters, so
+  the app keeps every post it has ever seen (up to 600) and adds each class's announcements and topics. The post
+  you are reading stays selected when new ones arrive.
 
 ## The library
 
@@ -97,10 +117,16 @@ Behaviour worth knowing, all learned from the live LMS:
 
 ## Layout of the TUI
 
-State and input handling (`app.rs`) are pure and know nothing of the terminal or network. A background
-worker thread (`worker.rs`) owns the session and every request, so the UI never blocks and re-authentication
-is transparent; the two talk over channels (`Cmd` out, `Event` back). The renderer (`ui.rs`) records every
-clickable region as it draws, so mouse handling always matches what is on screen. `demo.rs` is the fake LMS.
+| | |
+|---|---|
+| `data.rs` | the `Store` of everything fetched, with fetch times, per-kind freshness (`ttl`), the feed merge, and its JSON form |
+| `cache.rs` | the on-disk cache, written on its own thread |
+| `worker.rs` | the network: a read pool plus an ordered writer, sharing one session (`Sessions` is the seam tests replace) |
+| `app/` | state and input, pure (no terminal, no network): `mod.rs` decides what to ask for, `keys.rs`, `mouse.rs`, `input.rs` |
+| `ui/` | drawing, one file per view plus `modals.rs` and shared `widgets.rs`; every clickable region is recorded as it is drawn so the mouse always matches the screen |
+| `demo.rs` | the fake LMS behind `--demo` |
+
+The app and the worker talk over channels (`Cmd` out, `Event` back).
 
 ## Tests
 

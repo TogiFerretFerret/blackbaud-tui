@@ -2,6 +2,7 @@
 //! sentinels turned into `None`).
 
 use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::json;
@@ -10,7 +11,7 @@ use crate::text::{html_to_text, parse_lms_datetime};
 // ------------------------------------------------------------------ status & buckets
 
 /// A student's progress on an assignment or task.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Status {
     Todo,
     InProgress,
@@ -70,7 +71,7 @@ impl Status {
 }
 
 /// The assignment center's own grouping, in display order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Bucket {
     Missing,
     Overdue,
@@ -136,14 +137,14 @@ impl Bucket {
 
 // ------------------------------------------------------------------ assignment center
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ItemKind {
     Assignment,
     /// One of the student's own "My tasks" to-dos.
     Task,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Flags {
     pub late: bool,
     pub missing: bool,
@@ -172,7 +173,7 @@ impl Flags {
 }
 
 /// One row of the assignment center.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CenterItem {
     pub bucket: Bucket,
     pub kind: ItemKind,
@@ -227,7 +228,7 @@ impl CenterItem {
 
 // ------------------------------------------------------------------ classes
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Class {
     pub name: String,
     pub section_id: i64,
@@ -236,14 +237,14 @@ pub struct Class {
     pub subject: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Term {
     pub name: Option<String>,
     pub start: Option<NaiveDateTime>,
     pub end: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClassInfo {
     pub name: String,
     pub teacher: Option<String>,
@@ -281,7 +282,7 @@ impl ClassInfo {
 // ------------------------------------------------------------------ assignments
 
 /// One row of a class's assignment list.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AssignmentRow {
     pub id: i64,
     pub name: String,
@@ -308,14 +309,14 @@ impl AssignmentRow {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileRef {
     pub name: String,
     /// A site-relative path for [`crate::Client::download`].
     pub path: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Submission {
     pub submitted: Option<NaiveDateTime>,
     pub saved: Option<NaiveDateTime>,
@@ -324,7 +325,7 @@ pub struct Submission {
     pub text: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AssignmentDetail {
     pub id: i64,
     pub assignment_id: i64,
@@ -401,7 +402,7 @@ impl AssignmentDetail {
 
 // ------------------------------------------------------------------ class content, feed, grades
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Topic {
     pub topic_id: i64,
     pub index_id: i64,
@@ -409,7 +410,7 @@ pub struct Topic {
     pub published: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TopicItem {
     pub title: Option<String>,
     pub file: Option<String>,
@@ -418,7 +419,7 @@ pub struct TopicItem {
     pub text: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Announcement {
     pub title: String,
     pub author: Option<String>,
@@ -426,15 +427,19 @@ pub struct Announcement {
     pub text: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClassFile {
     pub name: String,
     pub path: String,
     pub published: Option<NaiveDateTime>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FeedItem {
+    /// `feed_index_log_id`: identifies the post across fetches.
+    pub id: Option<i64>,
+    /// `audit_date_serverTicks`: the cursor for [`crate::Client::activity_feed_since`].
+    pub ticks: Option<i64>,
     pub when: Option<NaiveDateTime>,
     pub from: Option<String>,
     pub class: Option<String>,
@@ -449,6 +454,8 @@ impl FeedItem {
         // "CLASS NAME $^sectionId $^assocId $^assignmentIndexId" (last part only on assignment posts)
         let loc: Vec<&str> = v.get("content_locations").and_then(Value::as_str).unwrap_or("").split("$^").map(str::trim).collect();
         FeedItem {
+            id: json::int(v, "feed_index_log_id"),
+            ticks: json::int(v, "audit_date_serverTicks"),
             when: json::string(v, "publish_date").or_else(|| json::string(v, "audit_date")).and_then(|s| parse_lms_datetime(&s)),
             from: json::string(v, "user_name"),
             class: loc.first().filter(|s| !s.is_empty()).map(|s| s.to_string()),
@@ -461,7 +468,7 @@ impl FeedItem {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GradeRow {
     pub id: i64,
     pub name: String,
@@ -512,7 +519,7 @@ impl GradeRow {
 
 /// Per-assignment scores for one marking period. The school hides cumulative course grades from
 /// students, so the total is plain points earned / points possible and is **unweighted**.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Grades {
     pub period: String,
     pub rows: Vec<GradeRow>,
@@ -530,7 +537,7 @@ impl Grades {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UserFile {
     pub name: String,
     pub folder: Option<String>,
@@ -538,7 +545,7 @@ pub struct UserFile {
 }
 
 /// One person on a class roster. Only teachers expose an email address.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Person {
     pub name: String,
     pub role: Option<String>,

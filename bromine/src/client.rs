@@ -377,6 +377,12 @@ impl Client {
         Ok(v.as_array().map(|a| a.iter().map(FeedItem::from_json).collect()).unwrap_or_default())
     }
 
+    /// Posts newer than `ticks` (a [`FeedItem::ticks`]): one cheap call that is empty when nothing is new.
+    pub fn activity_feed_since(&self, ticks: i64) -> Result<Vec<FeedItem>> {
+        let v = self.get("/api/datadirect/ActivityFeedRefresh/", &[("format", "json".into()), ("firstDate", ticks.to_string())])?;
+        Ok(v.as_array().map(|a| a.iter().map(FeedItem::from_json).collect()).unwrap_or_default())
+    }
+
     pub fn topics(&self, section_id: i64) -> Result<Vec<Topic>> {
         let v = self.get(
             &format!("/api/datadirect/sectiontopicsget/{section_id}/"),
